@@ -122,7 +122,7 @@ def main(args):
         args.tokenizer or args.model_name,
         revision=args.revision,
         use_fast=not args.slow_tokenizer,
-        tokenizer_type=args.tokenizer_class,
+        tokenizer_type=args.tokenizer_type,
     )
     assert isinstance(tokenizer, PreTrainedTokenizerBase)
     silence_datasets_messages()
@@ -136,7 +136,7 @@ def main(args):
         dataset = Dataset.from_json(args.dataset[0])
         assert isinstance(dataset, Dataset)
     else:
-        dataset = load_dataset(*args.dataset, split=args.split)
+        dataset = load_dataset(*args.dataset, 'java', split=args.split)
         if not isinstance(dataset, (Dataset, DatasetDict)):
             raise ValueError("Only Dataset and DatasetDict instances are supported.")
 

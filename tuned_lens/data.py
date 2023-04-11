@@ -18,7 +18,7 @@ def chunk_and_tokenize(
     *,
     format: str = "torch",
     num_proc: int = cpu_count() // 2,
-    text_key: str = "text",
+    text_key: str = "input",
 ) -> T:
     """Perform GPT-style chunking and tokenization on a dataset.
 
@@ -62,7 +62,7 @@ def compute_nats_to_bpb_ratio(raw: T, tokenized: T) -> float:
         The ratio of nats to bits per byte.
     """
     byte_counts = raw.map(
-        lambda x: {"length": [len(txt.encode("utf-8")) for txt in x["text"]]},
+        lambda x: {"length": [len(txt.encode("utf-8")) for txt in x["input"]]},
         batched=True,
         num_proc=cpu_count() // 2,
         remove_columns=get_columns_all_equal(raw),
@@ -83,7 +83,7 @@ def compute_nats_to_bpb_ratio(raw: T, tokenized: T) -> float:
 
 def _tokenize_fn(x: dict[str, list], tokenizer: PreTrainedTokenizerBase, text_key: str):
     """Annoyingly, we need to use a separate function so it can be hashed correctly."""
-    chunk_size = min(tokenizer.model_max_length, 2048)
+    chunk_size = min(tokenizer.model_max_length, 1024)
     sep = tokenizer.eos_token or "<|endoftext|>"
     output = tokenizer(
         # Concatenate all the samples together, separated by the EOS token.

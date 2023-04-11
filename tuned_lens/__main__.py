@@ -19,7 +19,7 @@ def run():
         "model_name", type=str, help="Name of model to use in the Huggingface Hub."
     )
     parent_parser.add_argument(
-        "dataset",
+        "--dataset",
         type=str,
         default=("the_pile", "all"),
         nargs="*",

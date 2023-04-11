@@ -9,7 +9,7 @@ import abc
 from ._model_specific import instantiate_layer, maybe_wrap
 from ..model_surgery import get_final_layer_norm, get_transformer_layers
 from ..load_artifacts import load_lens_artifacts
-from transformers import PreTrainedModel
+from transformers import PreTrainedModel, AutoModelForCausalLM
 from typing import Optional, Generator, Union
 import torch as th
 
@@ -245,7 +245,8 @@ class TunedLens(Lens):
             warn(f"Ignoring config key '{key}'")
             del config[key]
 
-        lens = cls(**config)
+        lens = cls(AutoModelForCausalLM.from_pretrained(config['model_config']['_name_or_path']))
+        #lens = cls(**config)
 
         if num_extras := config.get("extra_layers"):
             # This is sort of a hack but AutoConfig doesn't appear to have a from_dict
