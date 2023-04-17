@@ -1,7 +1,8 @@
 """Plot a lens table for some given text and model."""
 
 from ..nn.lenses import Lens
-from ..residual_stream import ResidualStream, record_residual_stream
+from ..residual_stream import ResidualStream
+from ..residual_stream import record_residual_stream
 from transformers import (
     PreTrainedModel,
     PreTrainedTokenizer,
@@ -17,6 +18,107 @@ import torch.nn.functional as F
 
 Tokenizer = Union[PreTrainedTokenizer, PreTrainedTokenizerFast]
 Statistic = Literal["ce", "entropy", "forward_kl", "max_prob"]
+
+
+@th.autocast("cuda", enabled=th.cuda.is_available())
+@th.no_grad()
+def get_top_preds(
+    model: PreTrainedModel,
+    tokenizer: Tokenizer,
+    lens: Lens,
+    *,
+    text: Optional[str] = None,
+    input_ids: Optional[th.Tensor] = None,
+    mask_input: bool = False,
+    start_pos: int = 0,
+    end_pos: Optional[int] = None,
+    layer_stride: int = 1,
+    statistic: Statistic = "entropy",
+    min_prob: float = 0.0,
+    max_string_len: Optional[int] = 7,
+    ellipsis: str = "…",
+    newline_replacement: str = "\\n",
+    newline_token: str = "Ċ",
+    whitespace_token: str = "Ġ",
+    whitespace_replacement: str = "_",
+    topk: int = 10,
+    topk_diff: bool = False,
+    ) -> ResidualStream:
+    if topk < 1:
+        raise ValueError("topk must be greater than 0")
+
+    if text is not None:
+        input_ids = cast(th.Tensor, tokenizer.encode(text, return_tensors="pt"))
+    elif input_ids is None:
+        raise ValueError("Either text or input_ids must be provided")
+
+    if input_ids.nelement() < 1:
+        raise ValueError("Input must be at least 1 token long.")
+
+    with record_residual_stream(model) as stream:
+        outputs = model(input_ids.to(model.device))
+
+    tokens = tokenizer.convert_ids_to_tokens(input_ids.squeeze().tolist())
+    model_logits = outputs.logits[..., start_pos:end_pos, :]
+    stream = stream.map(lambda x: x[..., start_pos:end_pos, :])
+    targets = th.cat(
+        (input_ids, th.full_like(input_ids[..., -1:], tokenizer.eos_token_id)),
+        dim=-1,
+    )
+    t_start_pos = start_pos if start_pos < 0 else start_pos + 1
+    if end_pos is None:
+        t_end_pos = None
+    elif end_pos < 0:
+        t_end_pos = end_pos
+    else:
+        t_end_pos = end_pos + 1
+
+    targets = targets[..., t_start_pos:t_end_pos]
+    tokens = tokens[start_pos:end_pos]
+
+    def decode_tl(h, i):
+        logits = lens.forward(h, i)
+        if mask_input:
+            logits[..., input_ids] = -th.finfo(h.dtype).max
+
+        return logits.log_softmax(dim=-1)
+
+    hidden_lps = stream.zip_map(
+        decode_tl,
+        range(len(stream) - 1),
+    )
+    # Add model predictions
+    hidden_lps.layers.append(
+        outputs.logits.log_softmax(dim=-1)[..., start_pos:end_pos, :]
+    )
+
+    # Replace whitespace and newline tokens with their respective replacements
+    format_fn = np.vectorize(
+        lambda x: x.replace(whitespace_token, whitespace_replacement).replace(
+            newline_token, newline_replacement
+        )
+        if isinstance(x, str)
+        else "<unk>"
+    )
+
+    top_strings = (
+        hidden_lps.map(lambda x: x.argmax(-1).squeeze().cpu().tolist())
+        .map(tokenizer.convert_ids_to_tokens)  # type: ignore[arg-type]
+        .map(format_fn)
+    )
+
+#    max_color = math.log(model.config.vocab_size)
+
+    if min_prob:
+        top_strings = top_strings.zip_map(
+            lambda strings, log_probs: [
+                s if lp.max() > np.log(min_prob) else ""
+                for s, lp in zip(strings, log_probs)
+            ],
+            hidden_lps,
+        )
+    return top_strings
+
 
 
 @th.autocast("cuda", enabled=th.cuda.is_available())
@@ -164,7 +266,7 @@ def plot_lens(
 
     color_scale = "blues"
     color_scale = "rdbu_r"
-
+    print(top_strings)
     return _plot_stream(
         color_stream=p_stat.stats.map(lambda x: x.squeeze().cpu()),
         colorbar_label=(p_stat.name + (f" ({p_stat.units})" if p_stat.units else "")),

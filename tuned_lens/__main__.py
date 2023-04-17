@@ -27,6 +27,13 @@ def run():
         "suitable to be passed to the HuggingFace load_dataset function.",
     )
     parent_parser.add_argument(
+        "--langs",
+        type = str,
+        default=("['Java-mit', 'Python-mit', 'Julia-mit']"),
+        help= "Thelangs to train the tuned lens on",
+    )
+
+    parent_parser.add_argument(
         "--cpu-offload",
         action="store_true",
         help="Use CPU offloading. Must be combined with --fsdp.",

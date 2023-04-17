@@ -16,6 +16,7 @@ def chunk_and_tokenize(
     data: T,
     tokenizer: PreTrainedTokenizerBase,
     *,
+    batch_size = 128,
     format: str = "torch",
     num_proc: int = cpu_count() // 2,
     text_key: str = "input",
@@ -39,7 +40,8 @@ def chunk_and_tokenize(
     return data.map(
         partial(_tokenize_fn, tokenizer=tokenizer, text_key=text_key),
         batched=True,
-        num_proc=num_proc,
+        batch_size = 128,
+        num_proc= cpu_count() // 2,
         remove_columns=get_columns_all_equal(data),
     ).with_format(
         format,
@@ -62,16 +64,18 @@ def compute_nats_to_bpb_ratio(raw: T, tokenized: T) -> float:
         The ratio of nats to bits per byte.
     """
     byte_counts = raw.map(
-        lambda x: {"length": [len(txt.encode("utf-8")) for txt in x["input"]]},
+        lambda x: {"length": [len(txt.encode("utf-8")) for txt in x["code"]]},
         batched=True,
-        num_proc=cpu_count() // 2,
+        num_proc=1,
+        batch_size = 1,
         remove_columns=get_columns_all_equal(raw),
     )
 
     token_counts = tokenized.map(
         lambda x: {"length": [len(ids) for ids in x["input_ids"]]},
         batched=True,
-        num_proc=cpu_count() // 2,
+        batch_size = 1,
+        num_proc=1,
         remove_columns=get_columns_all_equal(tokenized),
     )
     total_bytes = sum(byte_counts["length"])  # type: ignore[operator]

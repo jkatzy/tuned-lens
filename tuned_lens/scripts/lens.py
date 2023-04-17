@@ -1,6 +1,7 @@
 """Train or evaluate a tuned lens for a language model."""
-
-from datasets import Dataset, DatasetDict, load_dataset
+import random
+from ast import literal_eval
+from datasets import Dataset, DatasetDict, load_dataset, ReadInstruction, concatenate_datasets
 from functools import partial
 from hashlib import md5
 from torch.distributed.fsdp import (
@@ -136,7 +137,17 @@ def main(args):
         dataset = Dataset.from_json(args.dataset[0])
         assert isinstance(dataset, Dataset)
     else:
-        dataset = load_dataset(*args.dataset, 'java', split=args.split)
+        if args.langs:
+            datasets = {}
+            langs = literal_eval(args.langs)
+            for l in langs:
+                section = random.randint(0,100 - 10)
+                datasets[l] = load_dataset(*args.dataset, l, split = ReadInstruction(args.split, from_=section, to=section + 10, unit = '%'))
+                datasets[l] = datasets[l].remove_columns([col for col in datasets[l].column_names if col != args.text_column])
+            dataset = concatenate_datasets(list(datasets.values()))
+            dataset = dataset.shuffle(seed = 42)
+        else:
+            dataset = load_dataset(*args, dataset, 'julia-all', split = args.split)
         if not isinstance(dataset, (Dataset, DatasetDict)):
             raise ValueError("Only Dataset and DatasetDict instances are supported.")
 
