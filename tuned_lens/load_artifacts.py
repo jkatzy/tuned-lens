@@ -41,7 +41,7 @@ def load_lens_artifacts(
         if os.environ.get("TUNED_LENS_REPO_ID"):
             repo_id = os.environ["TUNED_LENS_REPO_ID"]
         else:
-            repo_id = "AlignmentResearch/tuned-lens"
+            repo_id = "AISE-TUDelft"
 
     if repo_type is None:
         if os.environ.get("TUNED_LENS_REPO_TYPE"):
@@ -53,22 +53,15 @@ def load_lens_artifacts(
     local_path = Path(resource_id)
     if (local_path / config_file).exists() and (local_path / ckpt_file).exists():
         return local_path / config_file, local_path / ckpt_file
-
-    subfolder = "/".join((subfolder, resource_id))
+ 
     params_path = hf_hub_download(
         filename=ckpt_file,
-        repo_id=repo_id,
-        repo_type=repo_type,
-        revision=revision,
-        subfolder=subfolder,
+        repo_id=resource_id,
     )
 
     config_path = hf_hub_download(
         filename=config_file,
-        repo_id=repo_id,
-        repo_type=repo_type,
-        revision=revision,
-        subfolder=subfolder,
+        repo_id=resource_id,
     )
 
     if config_path is not None and params_path is not None:
