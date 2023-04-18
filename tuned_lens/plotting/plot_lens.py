@@ -266,7 +266,6 @@ def plot_lens(
 
     color_scale = "blues"
     color_scale = "rdbu_r"
-    print(top_strings)
     return _plot_stream(
         color_stream=p_stat.stats.map(lambda x: x.squeeze().cpu()),
         colorbar_label=(p_stat.name + (f" ({p_stat.units})" if p_stat.units else "")),
